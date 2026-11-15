@@ -1,20 +1,22 @@
 #!/bin/bash
-# Feature dispatcher: polls features/ and delegates each feature file to a
-# claude-code worktree agent in the target project.
+# Feature dispatcher: polls features/ready/ and delegates each feature file to
+# a claude worktree agent in the target project.
 #
-# File format (features/<anything>.md):
+# File format (features/ready/<anything>.md):
 #   Project: <Project in workspace>
 #
 #   Feature:
 #   <Description of the feature we want>
 #
 # The project name must be a line in projects.md (`name: /path/to/repo`).
-# Dispatched files move to features/.dispatched/, failures to features/failed/.
+# Drafts go in features/draft/ — never picked up. Dispatched files move to
+# features/.dispatched/, failures to features/failed/.
 # The concurrency cap lives in bin/dispatch.conf (max_in_flight).
 set -u
 
 HOMEREPO="$(cd "$(dirname "$0")/.." && pwd)"
 FEATURES_DIR="$HOMEREPO/features"
+READY_DIR="$FEATURES_DIR/ready"
 CONSUMED_DIR="$FEATURES_DIR/.dispatched"
 FAILED_DIR="$FEATURES_DIR/failed"
 PROJECTS="$HOMEREPO/projects.md"
@@ -24,7 +26,7 @@ LOG="$HOMEREPO/features/.dispatch.log"
 # cron PATH is minimal; workmux lives in /opt/homebrew/bin.
 PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-mkdir -p "$CONSUMED_DIR" "$FAILED_DIR"
+mkdir -p "$READY_DIR" "$CONSUMED_DIR" "$FAILED_DIR"
 
 # One dispatcher run at a time; a leftover lock from a killed run is removed
 # when the lock directory has no live owner process.
@@ -67,11 +69,10 @@ in_flight() {
 export TMUX_SESSION_NAME=homerepo
 
 shipped=0
-for file in "$FEATURES_DIR"/*.md; do
+for file in "$READY_DIR"/*.md; do
   [ -e "$file" ] || exit 0   # no files
 
   name="$(basename "$file")"
-  [ "$name" = "README.md" ] && continue   # documentation, never dispatched
 
   # Parse format: "Project: X" ... "Feature:" ... description
   project="$(sed -n 's/^Project:[[:space:]]*//p' "$file" | head -1 | tr -d '[:space:]' )"
