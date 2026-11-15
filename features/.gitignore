@@ -2,3 +2,4 @@
 failed/
 .lock/
 .dispatch.log
+.cron.log
